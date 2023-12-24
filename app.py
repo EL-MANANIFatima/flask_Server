@@ -10,12 +10,12 @@ OPENAI_API_KEY = ""
 openai.api_key = OPENAI_API_KEY
 
 # Add your ElevenLabs API key
-ELEVENLABS_API_KEY = ""
-ELEVENLABS_VOICE_STABILITY = 0.30
+ELEVENLABS_API_KEY = "3224bfb987dda6810f7cf2e52876c306"
+ELEVENLABS_VOICE_STABILITY = 0.50
 ELEVENLABS_VOICE_SIMILARITY = 0.75
 
 # Choose your favorite ElevenLabs voice
-ELEVENLABS_VOICE_NAME = "Hugh"
+ELEVENLABS_VOICE_NAME = "FEHE"
 ELEVENLABS_ALL_VOICES = []
 
 app = Flask(__name__)
@@ -92,6 +92,8 @@ def generate_audio(text: str, output_path: str = "") -> str:
         "voice_settings": {
             "stability": ELEVENLABS_VOICE_STABILITY,
             "similarity_boost": ELEVENLABS_VOICE_SIMILARITY,
+            "model": "Eleven Multilingual v2",
+
         }
     }
     response = requests.post(url, json=data, headers=headers)
@@ -120,16 +122,33 @@ def transcribe():
     return jsonify({'text': transcription})
 
 
+# @app.route('/ask', methods=['POST'])
+# def ask():
+#     """Generate a ChatGPT response from the given conversation, then convert it to audio using ElevenLabs."""
+#     conversation = request.get_json(force=True).get("conversation", "")
+#     reply = generate_reply(conversation)
+#     reply_file = f"{uuid.uuid4()}.mp3"
+#     reply_path = f"outputs/{reply_file}"
+#     os.makedirs(os.path.dirname(reply_path), exist_ok=True)
+#     generate_audio(reply, output_path=reply_path)
+#     return jsonify({'text': reply, 'audio': f"/listen/{reply_file}"})
+import requests
+
 @app.route('/ask', methods=['POST'])
 def ask():
-    """Generate a ChatGPT response from the given conversation, then convert it to audio using ElevenLabs."""
-    conversation = request.get_json(force=True).get("conversation", "")
-    reply = generate_reply(conversation)
+    user_input = request.get_json().get("conversation", "")
+    if user_input:
+        content = user_input[-1].get("content", "") if isinstance(user_input, list) else ""
+    else:
+        content = ""
+    rasa_response = requests.post('http://localhost:5005/webhooks/rest/webhook', json={"message": content})
+    
+    rasa_text_response = rasa_response.json()[0]['text'] if rasa_response.ok else "Sorry, I couldn't understand."
     reply_file = f"{uuid.uuid4()}.mp3"
     reply_path = f"outputs/{reply_file}"
     os.makedirs(os.path.dirname(reply_path), exist_ok=True)
-    generate_audio(reply, output_path=reply_path)
-    return jsonify({'text': reply, 'audio': f"/listen/{reply_file}"})
+    generate_audio(rasa_text_response, output_path=reply_path)
+    return jsonify({'text': rasa_text_response, 'audio': f"/listen/{reply_file}"})
 
 
 @app.route('/listen/<filename>')
